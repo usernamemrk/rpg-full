@@ -1,17 +1,17 @@
 # RPG Full — Design Spec
 **Data:** 2026-03-23
-**Status:** Aprovado
+**Status:** Aprovado (v4 — revisao final)
 **Escopo:** Projeto RPG multiplayer online top-down 2D com 5 features principais
 
 ---
 
 ## Contexto
 
-RPG multiplayer online em tempo real para até 6 jogadores + 1 mestre (GM) por sessão. Perspectiva top-down 2D com tiles. O mestre tem painel dedicado com controle total sobre mapa, loot, spawns e eventos. Jogadores têm contas persistentes com personagens salvos no banco.
+RPG multiplayer online em tempo real para ate 6 jogadores + 1 mestre (GM) por sessao. Perspectiva top-down 2D com tiles. O mestre tem painel dedicado com controle total sobre mapa, loot, spawns e eventos. Jogadores tem contas persistentes com personagens salvos no banco.
 
 ---
 
-## Seção 1: Arquitetura Geral
+## Secao 1: Arquitetura Geral
 
 ### Stack
 
@@ -19,9 +19,10 @@ RPG multiplayer online em tempo real para até 6 jogadores + 1 mestre (GM) por s
 |--------|-----------|
 | Frontend | Vite + React + TypeScript |
 | Engine do jogo | Canvas HTML5 puro |
-| Animações de magias | Phaser.js (carregado sob demanda) |
-| Comunicação real-time | Socket.io |
+| Animacoes de magias | Phaser.js (carregado sob demanda) |
+| Comunicacao real-time | Socket.io |
 | Backend | Node.js + Express |
+| Validacao de schema | Zod |
 | ORM | Prisma |
 | Banco de dados | PostgreSQL |
 | Auth | JWT (access 15min) + refresh token (httpOnly cookie, 7d) |
@@ -39,10 +40,11 @@ rpg-full/
 │   │       └── pages/       # Login, Lobby, Game, Master
 │   └── server/              # Node.js + Express + Socket.io + Prisma
 │       └── src/
-│           ├── api/         # Rotas REST (auth, characters, maps, sessions)
+│           ├── api/         # Rotas REST (auth, characters, maps, sessions, items, spells)
 │           ├── socket/      # Handlers de eventos Socket.io
-│           ├── game/        # Lógica de jogo (LootService, SpellService)
-│           └── prisma/      # Schema + migrations
+│           ├── game/        # LootService, SpellService
+│           ├── config/      # spells.ts — catalogo estatico de magias
+│           └── prisma/      # Schema + migrations + seed
 ├── package.json             # workspace root
 └── pnpm-workspace.yaml
 ```
@@ -50,157 +52,315 @@ rpg-full/
 ### Fluxo de Dados
 
 ```
-Browser ──REST──► Express API    (auth, CRUD de personagens/mapas)
+Browser ──REST──► Express API    (auth, CRUD de personagens/mapas/itens)
 Browser ──WS────► Socket.io      (jogo em tempo real)
-Socket.io ──────► Room por sessão (máx 7 conexões: 6 jogadores + 1 GM)
+Socket.io ──────► Room por sessao (max 7 conexoes: 6 jogadores + 1 GM)
 ```
 
 ---
 
-## Seção 2: Engine do Jogo + Editor de Mapa
+## Secao 2: Engine do Jogo + Editor de Mapa
 
 ### Canvas Engine
 
 ```
 client/src/engine/
 ├── GameLoop.ts      # requestAnimationFrame, delta time
-├── Camera.ts        # scroll, zoom, seguir personagem
+├── Camera.ts        # scroll, zoom, seguir personagem — expoe worldToScreen/screenToWorld
 ├── TileMap.ts       # renderiza grid de tiles no canvas
-├── TileSet.ts       # spritesheet, índice de tiles
+├── TileSet.ts       # spritesheet, indice de tiles
 ├── EntityLayer.ts   # personagens, NPCs, baus sobre o mapa
 └── Minimap.ts       # canvas secundario 150x150px, canto inferior direito
 ```
 
-O mapa e representado como uma **matriz 2D de inteiros** (`number[][]`) com 3 layers renderizadas em ordem: `ground`, `objects`, `overlay`.
+O mapa e representado como uma **matriz 2D de inteiros** (`number[][]`) com 3 layers em ordem: `ground`, `objects`, `overlay`.
+
+`Camera` expoe:
+- `worldToScreen(worldX, worldY): { x, y }`
+- `screenToWorld(screenX, screenY): { x, y }`
 
 ### Editor Visual de Mapa
 
-- Mesmo `TileMap.ts` do jogo em modo edição — sem engine separado
+- Mesmo `TileMap.ts` do jogo em modo edicao
 - Toolbar lateral: paleta de tiles do spritesheet (grid clicavel)
-- Tile selecionado + clique/arrastar no canvas pinta a celula
-- Ferramentas: pincel (1 tile), balde (flood fill), borracha, selecao retangular
+- Tile selecionado + clique/arrastar pinta a celula
+- Ferramentas: pincel, balde (flood fill), borracha, selecao retangular
 - Camadas: seletor de layer ativa (ground / objects / overlay)
-- Historico: desfazer/refazer com stack de ate 50 estados
-- Salvar: `POST /api/maps/:id` → Prisma persiste JSON da matriz
+- Historico: stack de 50 estados **client-side em memoria** (perdido ao recarregar — esperado)
+- Salvar: `POST /api/maps/:id` com body `{ layers, sessionId }` → Prisma persiste → servidor emite `map:updated { mapId }` para a room `session:<sessionId>` → cliente re-busca o mapa via `GET /api/maps/:id`
+
+### Tileset
+
+`tilesetId` e o nome de um arquivo estatico em `packages/client/public/assets/tilesets/<tilesetId>.png`. Nao ha modelo `Tileset` no banco.
 
 ### Schema do Mapa
 
 ```prisma
 model Map {
-  id        String   @id @default(cuid())
-  name      String
-  width     Int
-  height    Int
-  tilesetId String
-  layers    Json     // { ground: number[][], objects: number[][], overlay: number[][] }
-  createdBy String
-  createdAt DateTime @default(now())
+  id          String    @id @default(cuid())
+  name        String
+  width       Int
+  height      Int
+  tilesetId   String
+  layers      Json      // { ground: number[][], objects: number[][], overlay: number[][] }
+  createdById String
+  createdBy   User      @relation("MapCreator", fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  chests      Chest[]
+  sessions    Session[]
 }
-```
-
-### Evento Socket.io ao Salvar
-
-```
-map:updated  →  broadcast para todos na sessao  →  clientes recarregam o mapa
 ```
 
 ---
 
-## Seção 3: Multiplayer em Tempo Real + Autenticacao
+## Secao 3: Multiplayer em Tempo Real + Autenticacao
 
-### Endpoints REST de Auth
+### JWT Payload
 
-| Metodo | Rota | Descricao |
-|--------|------|-----------|
-| POST | /api/auth/register | Cria usuario + hash bcrypt |
-| POST | /api/auth/login | Retorna JWT + seta cookie refresh |
-| POST | /api/auth/refresh | Renova access token |
-| POST | /api/auth/logout | Invalida refresh token |
+```ts
+interface JWTPayload {
+  sub: string          // userId
+  role: 'gm' | 'player'
+  characterId: string
+  sessionId?: string
+  iat: number
+  exp: number
+}
+```
+
+### Endpoints REST
+
+| Metodo | Rota | Body / Params | Descricao |
+|--------|------|---------------|-----------|
+| POST | /api/auth/register | `{ email, password, name }` | Cria usuario |
+| POST | /api/auth/login | `{ email, password }` | Retorna JWT + seta cookie refresh |
+| POST | /api/auth/refresh | — | Renova access token via cookie |
+| POST | /api/auth/logout | — | Invalida refresh token |
+| GET  | /api/maps/:id | — | Retorna dados do mapa |
+| POST | /api/maps/:id | `{ layers: LayersJson, sessionId: string }` | Salva mapa e emite map:updated |
+| GET  | /api/items | — | Lista catalogo de itens |
+| POST | /api/items | `{ name, type, rarity, stats }` | Cria item (role: gm) |
+| GET  | /api/spells | — | Lista catalogo de magias (fonte: config estatica) |
+| POST | /api/sessions/:id/ambient | `{ ambient: AmbientName }` | Muda som; valida role gm; emite ambient:change |
+
+Todos os bodies sao validados com **Zod** no servidor antes de processar.
+
+### Magias — Configuracao Estatica
+
+Magias nao tem modelo no banco. Sao definidas em `server/src/config/spells.ts`:
+
+```ts
+interface SpellDefinition {
+  id: string           // ex: 'lightning', 'explosion', 'healing'
+  name: string
+  damage?: number
+  healing?: number
+  range: number        // em tiles
+  fxType: 'lightning' | 'explosion' | 'healing'
+}
+
+export const SPELLS: SpellDefinition[] = [ /* catalogo */ ]
+```
+
+`SpellService` busca a definicao em `SPELLS` pelo `spellId`, calcula dano/cura e emite os eventos resultantes. `GET /api/spells` expoe o catalogo para o cliente.
 
 ### Eventos Socket.io
 
-```
+```ts
 // Sessao
-session:join       → jogador entra na sala (valida JWT no handshake)
-session:leave      → jogador sai
-session:players    → broadcast da lista atual
+session:join    client→server  { sessionCode: string, characterId: string }
+session:joined  server→client  { sessionId: string, players: SessionPlayer[] }
+session:error   server→client  { code: 'SESSION_FULL'|'SESSION_NOT_FOUND'|'SESSION_ENDED'|'UNAUTHORIZED', message: string }
+session:leave   client→server  {}
+// Apos session:leave ou desconexao: servidor emite session:players (lista atualizada) para a room
+session:players server→client  { players: SessionPlayer[] }
+
+// DTOs
+interface SessionPlayer {
+  userId: string
+  characterId: string
+  name: string
+  class: string
+  x: number
+  y: number
+  hp: number
+}
 
 // Movimento
-player:move        → { x, y, direction } — servidor valida e re-emite
-player:state       → sync periodico de posicoes (60ms)
+// Intervalo de emissao pelo cliente: 60ms
+// Servidor valida apenas limites do mapa (sem colisao de parede no MVP — aceitavel)
+// Clientes aplicam interpolacao linear entre estados recebidos
+player:move     client→server  { x: number, y: number, direction: 'up'|'down'|'left'|'right' }
+player:state    server→client  { players: { userId: string, x: number, y: number, direction: string }[] }
 
 // Magias
-spell:cast         → { spellId, targetX, targetY }
-spell:effect       → broadcast para animacao nos clientes
-entity:damage      → { entityId, amount, newHp }
+spell:cast      client→server  { spellId: string, targetX: number, targetY: number }
+spell:effect    server→client  { spellId: string, casterId: string, originX: number, originY: number, targetX: number, targetY: number }
+entity:damage   server→client  { entityId: string, amount: number, newHp: number }
 
 // Mapa
-map:updated        → mestre salvou mapa
-map:reveal         → mestre revela area (fog of war)
+map:updated     server→client  { mapId: string }  // cliente re-busca via GET /api/maps/:id
+map:reveal      server→client  { x: number, y: number, radius: number }
 
 // Loot
-chest:open         → jogador abre bau
-chest:loot         → { chestId, items[] } emitido so para o jogador
-chest:opened       → broadcast (anima bau aberto)
+chest:open      client→server  { chestId: string }
+chest:loot      server→client  { chestId: string, items: LootedItem[] }   // apenas para o socket do jogador
+chest:opened    server→client  { chestId: string }                         // broadcast
+
+interface LootedItem {
+  itemId: string
+  name: string
+  type: string
+  rarity: string
+  quantity: number
+  stats: Record<string, number>
+}
 
 // Ambiente
-ambient:change     → mestre muda som ambiente da sessao
+ambient:change  server→client  { ambient: 'floresta'|'caverna'|'cidade'|'dungeon'|'batalha'|'chuva' }
 ```
 
-### Permissoes
+### Session.state e Posicao dos Jogadores
 
-Role `gm` vs `player` no JWT payload. Servidor valida role antes de processar eventos exclusivos do mestre (`map:updated`, `map:reveal`, `ambient:change`, configuracao de loot).
+```ts
+interface SessionState {
+  players: {
+    userId: string
+    characterId: string
+    x: number
+    y: number
+    hp: number
+    direction: string
+  }[]
+}
+```
 
-### Schema Prisma
+**Persistencia:** mantido **em memoria** durante o jogo. Persistido no banco a cada **30 segundos** e ao receber `session:leave` ou desconexao.
+
+### Schema Prisma Completo
 
 ```prisma
+enum SessionStatus {
+  active
+  ended
+}
+
 model User {
-  id           String      @id @default(cuid())
-  email        String      @unique
-  passwordHash String
-  characters   Character[]
+  id              String      @id @default(cuid())
+  email           String      @unique
+  passwordHash    String
+  characters      Character[]
+  mapsCreated     Map[]       @relation("MapCreator")
+  sessionsAsGm    Session[]   @relation("SessionGM")
 }
 
 model Character {
-  id      String @id @default(cuid())
-  name    String
-  class   String
-  hp      Int
-  maxHp   Int
-  level   Int    @default(1)
-  userId  String
-  user    User   @relation(fields: [userId], references: [id])
+  id             String          @id @default(cuid())
+  name           String
+  class          String
+  hp             Int
+  maxHp          Int
+  // level e definido pelo GM manualmente ou via seed; sem sistema de XP/progressao no MVP
+  level          Int             @default(1)
+  userId         String
+  user           User            @relation(fields: [userId], references: [id])
+  inventoryItems InventoryItem[]
+}
+
+model InventoryItem {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id])
+  itemId      String
+  item        Item      @relation(fields: [itemId], references: [id])
+  quantity    Int       @default(1)
+
+  @@unique([characterId, itemId])
 }
 
 model Session {
-  id      String   @id @default(cuid())
-  code    String   @unique
-  gmId    String
-  mapId   String
-  state   Json
+  id          String        @id @default(cuid())
+  code        String        @unique
+  gmId        String
+  gm          User          @relation("SessionGM", fields: [gmId], references: [id])
+  mapId       String
+  map         Map           @relation(fields: [mapId], references: [id])
+  status      SessionStatus @default(active)
+  state       Json          // SessionState — persistido a cada 30s e ao encerrar
+  chestStates ChestState[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model ChestState {
+  id        String  @id @default(cuid())
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id])
+  chestId   String
+  chest     Chest   @relation(fields: [chestId], references: [id])
+  opened    Boolean @default(false)
+
+  @@unique([sessionId, chestId])
+}
+
+model Map {
+  id          String        @id @default(cuid())
+  name        String
+  width       Int
+  height      Int
+  tilesetId   String
+  layers      Json
+  createdById String
+  createdBy   User          @relation("MapCreator", fields: [createdById], references: [id])
+  createdAt   DateTime      @default(now())
+  chests      Chest[]
+  sessions    Session[]
 }
 
 model Chest {
-  id        String @id @default(cuid())
-  mapId     String
-  x         Int
-  y         Int
-  opened    Boolean @default(false)
-  lootTable Json
+  id          String       @id @default(cuid())
+  name        String
+  mapId       String
+  map         Map          @relation(fields: [mapId], references: [id])
+  x           Int
+  y           Int
+  lootTable   Json         // LootTable — validado com Zod ao salvar
+  chestStates ChestState[]
 }
 
 model Item {
-  id    String @id @default(cuid())
-  name  String
-  type  String
-  rarity String
-  stats Json
+  id             String          @id @default(cuid())
+  name           String
+  type           String          // 'weapon' | 'armor' | 'potion' | 'gold' | 'misc'
+  rarity         String          // 'common' | 'uncommon' | 'rare' | 'legendary'
+  stats          Json            // { damage?, defense?, healing?, value? }
+  inventoryItems InventoryItem[]
 }
+```
+
+### Seed de Itens
+
+`packages/server/src/prisma/seed.ts` popula `Item` com catalogo base (armas, armaduras, pocoes, ouro). GM cria itens adicionais via `POST /api/items`. `LootTable.entries[].itemId` deve referenciar um `Item` existente.
+
+### Validacao de lootTable com Zod
+
+Ao salvar um bau (`PUT /api/chests/:id`), o body e validado com:
+
+```ts
+const LootTableSchema = z.object({
+  mode: z.enum(['single_use', 'infinite']),
+  guaranteed_min: z.number().int().min(0),
+  entries: z.array(z.object({
+    itemId: z.string(),
+    quantity: z.object({ min: z.number().int().min(1), max: z.number().int().min(1) }),
+    weight: z.number().min(0)
+  }))
+})
 ```
 
 ---
 
-## Seção 4: Sons Ambiente + Animacoes de Magias + Minimap
+## Secao 4: Sons Ambiente + Animacoes de Magias + Minimap
 
 ### Sons Ambiente — Web Audio API
 
@@ -215,10 +375,10 @@ AudioManager
 ```
 
 - Formatos: `.ogg` (primario) + `.mp3` (fallback)
-- Loop infinito: `BufferSourceNode.loop = true`
-- AudioContext criado na primeira interacao do usuario (politica de autoplay)
-- Sons disponiveis: `floresta`, `caverna`, `cidade`, `dungeon`, `batalha`, `chuva`
-- Acionado pelo evento `ambient:change` recebido via Socket.io
+- Loop: `BufferSourceNode.loop = true`
+- AudioContext criado na primeira interacao do usuario (politica autoplay)
+- Sons: `floresta`, `caverna`, `cidade`, `dungeon`, `batalha`, `chuva`
+- Acionado por `ambient:change` via Socket.io
 
 ### Animacoes de Magias — Phaser.js
 
@@ -226,15 +386,15 @@ AudioManager
 client/src/engine/SpellFX.ts
 
 SpellFX
-  lightning(x, y, targetX, targetY)  → segmentos quebrados + brilho + fade 600ms
-  explosion(x, y, radius)            → particulas radiais + anel de choque + fumaca
-  healing(x, y)                      → particulas verdes ascendentes + brilho pulsante
+  lightning(screenX, screenY, screenTargetX, screenTargetY)
+  explosion(screenX, screenY, radius)
+  healing(screenX, screenY)
 ```
 
-- Phaser carregado via **dynamic import** apenas quando `spell:effect` e recebido
-- Instanciado em canvas **transparente sobreposto** ao canvas principal (position absolute, z-index superior)
-- Apos animacao concluir → `Phaser.Scene` destruida, canvas removido do DOM
-- Acionado pelo evento Socket.io `spell:effect` em todos os clientes simultaneamente
+- Recebe world coords de `spell:effect` e chama `Camera.worldToScreen()` antes de renderizar
+- Phaser carregado via dynamic import ao receber `spell:effect`
+- Canvas transparente sobreposto (position absolute, mesmas dimensoes, z-index superior)
+- Apos animacao: `Phaser.Scene` destruida, canvas removido do DOM
 
 ### Minimap
 
@@ -242,28 +402,31 @@ SpellFX
 client/src/engine/Minimap.ts
 ```
 
-- Canvas secundario `150x150px`, fixo no canto inferior direito do HUD
-- Re-renderizado a cada frame: itera `ground` layer, mapeia tile → cor solida (lookup table)
-- Personagens: pontos coloridos por classe
-- Ponto branco: posicao do jogador local; retangulo translucido: area visivel da camera
-- Visibilidade: mestre ve todos os jogadores; jogadores veem apenas aliados no campo de visao
-- Clique no minimap: camera principal salta para aquela coordenada (apenas mestre)
+- Canvas `150x150px` fixo no canto inferior direito do HUD
+- Itera `ground` layer a cada frame, mapeia tile → cor solida
+- Pontos coloridos por classe; ponto branco = jogador local; retangulo translucido = area visivel
+- Visibilidade: mestre ve todos; jogadores veem todos os aliados (sem fog individual no MVP)
+- Clique: `minimapToWorld(x, y)` → `Camera.moveTo(worldX, worldY)` (apenas mestre)
 
 ---
 
-## Seção 5: Sistema de Loot dos Baus
+## Secao 5: Sistema de Loot dos Baus
+
+### Validacao de Adjacencia
+
+Servidor le `Session.state.players` (em memoria) e verifica Chebyshev distance ≤ 1 entre o personagem e o bau (`Chest.x`, `Chest.y`).
 
 ### Painel de Configuracao (Mestre)
 
-Componente `client/src/components/master/ChestEditor.tsx` — abre ao clicar num bau no editor de mapa.
+`client/src/components/master/ChestEditor.tsx` — abre ao clicar num bau no editor.
 
-Campos configureis:
+Campos:
 - Nome do bau
-- Modo: `single_use` (abre uma vez) ou `infinite` (reabrivel)
-- Minimo garantido de itens por abertura
-- Tabela de itens: item, quantidade (min-max), peso relativo
+- Modo: `single_use` ou `infinite`
+- `guaranteed_min`
+- Tabela de itens: seleciona do catalogo via `GET /api/items`, define quantidade e peso
 
-### Schema da Loot Table (JSON)
+### Schema da Loot Table
 
 ```ts
 interface LootTable {
@@ -272,30 +435,34 @@ interface LootTable {
   entries: {
     itemId: string
     quantity: { min: number; max: number }
-    weight: number          // peso relativo — nao porcentagem fixa
+    weight: number
   }[]
 }
 ```
 
-### Algoritmo de Sorteio — Servidor
+### Algoritmo de Sorteio
 
-Implementado em `server/src/game/LootService.ts`:
+`server/src/game/LootService.ts`:
 
-1. Filtra entries com peso > 0
-2. Sorteia `guaranteed_min` itens por weighted random sem reposicao
-3. Para cada item sorteado, gera quantidade aleatoria entre `min` e `max`
-4. Bau `single_use` → `opened: true` no banco apos primeiro sorteio
+1. Parse e valida `lootTable` com `LootTableSchema` (Zod)
+2. Filtra entries com `weight > 0`
+3. `effectiveMin = Math.min(guaranteed_min, entries.length)`
+4. Weighted random sem reposicao para `effectiveMin` itens
+5. Quantidade aleatoria entre `min` e `max` por item
+6. Busca dados completos via Prisma para montar `LootedItem[]`
+7. `single_use`: upsert `ChestState { opened: true }` no banco
+8. `infinite`: nenhum `ChestState` e criado ou verificado
 
 ### Fluxo Completo
 
 ```
-Jogador clica no bau
-  → chest:open { chestId }
-  → servidor valida: jogador adjacente? bau nao aberto?
-  → LootService.roll(lootTable) → items[]
-  → chest:loot { chestId, items }  →  emitido APENAS para aquele socket
-  → chest:opened { chestId }       →  broadcast (anima bau)
-  → CharacterInventory += items    →  salvo no banco
+chest:open { chestId }
+  → adjacencia: Chebyshev(player, chest) ≤ 1?
+  → mode=single_use: ChestState.opened=false?  |  mode=infinite: prossegue direto
+  → LootService.roll(lootTable) → LootedItem[]
+  → chest:loot { chestId, items }  →  socket do jogador
+  → chest:opened { chestId }       →  broadcast
+  → InventoryItem upsert           →  Prisma
 ```
 
 ---
