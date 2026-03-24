@@ -699,7 +699,7 @@ import request from 'supertest'
 import { createApp } from '../app'
 import jwt from 'jsonwebtoken'
 
-const app = createApp()
+const { app } = createApp()
 
 function gmToken(userId = 'user1', charId = 'char1') {
   return jwt.sign({ sub: userId, role: 'gm', characterId: charId }, process.env.JWT_SECRET ?? 'test', { expiresIn: '1h' })
@@ -3042,7 +3042,8 @@ export default function GamePage() {
     const offPlayers = on<{ players: any[] }>('session:players', ({ players }) => {
       setPlayers(players)
       for (const p of players) {
-        entities.upsert({ id: p.characterId, x: p.x * 32, y: p.y * 32, color: '#4af', label: p.characterId.slice(0, 4) })
+        // p.x and p.y are already in pixel coords (stored and moved in pixels)
+        entities.upsert({ id: p.characterId, x: p.x, y: p.y, color: '#4af', label: p.characterId.slice(0, 4) })
       }
     })
 
@@ -3077,7 +3078,7 @@ export default function GamePage() {
   return (
     <div style={{ position: 'relative', display: 'inline-block' }} tabIndex={0} onKeyDown={handleKeyDown}>
       <canvas ref={canvasRef} width={800} height={600} style={{ display: 'block', background: '#111' }} />
-      <HUD tileMap={tileMap.current} camera={camera} players={players.map(p => ({ userId: p.userId ?? p.characterId, x: p.x * 32, y: p.y * 32, class: p.class ?? 'warrior', isLocal: p.characterId === characterId }))} isGM={false} />
+      <HUD tileMap={tileMap.current} camera={camera} players={players.map(p => ({ userId: p.userId ?? p.characterId, x: p.x, y: p.y, class: p.class ?? 'warrior', isLocal: p.characterId === characterId }))} isGM={false} />
     </div>
   )
 }
