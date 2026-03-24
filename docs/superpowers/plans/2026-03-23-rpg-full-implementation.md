@@ -882,7 +882,7 @@ const PORT = process.env.PORT ?? 3001
 httpServer.listen(PORT, () => console.log(`Server :${PORT}`))
 ```
 
-Update `packages/server/src/__tests__/auth.test.ts` — change `createApp()` calls to `createApp().app`.
+Update `packages/server/src/__tests__/auth.test.ts` — change `const app = createApp()` to `const { app } = createApp()`.
 
 - [ ] **Step 7: Run all server tests — expect PASS**
 
