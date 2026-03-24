@@ -466,8 +466,9 @@ Create `packages/server/src/__tests__/auth.test.ts`:
 import request from 'supertest'
 import { createApp } from '../app'
 
-// Note: createApp() returns { app, httpServer, io } — use .app for supertest
-const { app } = createApp()
+// Note: at Task 3, createApp() returns a plain Express app.
+// Task 4 Step 6 will change this to `const { app } = createApp()` when the return type becomes { app, httpServer, io }.
+const app = createApp()
 
 describe('POST /api/auth/register', () => {
   it('creates a user and returns 201', async () => {
