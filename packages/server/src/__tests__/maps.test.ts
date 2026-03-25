@@ -1,6 +1,7 @@
 import request from 'supertest'
 import { createApp } from '../app'
 import jwt from 'jsonwebtoken'
+import { prisma } from '../lib/prisma'
 
 process.env.JWT_SECRET = 'test-secret'
 process.env.JWT_REFRESH_SECRET = 'test-refresh-secret'
@@ -25,4 +26,8 @@ describe('GET /api/spells', () => {
     expect(Array.isArray(res.body)).toBe(true)
     expect(res.body[0]).toHaveProperty('id')
   })
+})
+
+afterAll(async () => {
+  await prisma.$disconnect()
 })

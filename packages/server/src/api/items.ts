@@ -20,8 +20,12 @@ router.get('/', requireAuth, async (_req, res) => {
 router.post('/', requireAuth, requireRole('gm'), async (req: AuthRequest, res) => {
   const parsed = ItemSchema.safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() })
-  const item = await prisma.item.create({ data: { ...parsed.data, stats: parsed.data.stats } })
-  res.status(201).json(item)
+  try {
+    const item = await prisma.item.create({ data: { ...parsed.data, stats: parsed.data.stats } })
+    res.status(201).json(item)
+  } catch {
+    res.status(409).json({ error: 'Item with this name already exists' })
+  }
 })
 
 export default router

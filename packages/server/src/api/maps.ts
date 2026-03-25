@@ -1,6 +1,6 @@
-import { Router } from 'express'
+import { Router, Request } from 'express'
 import { z } from 'zod'
-import { requireAuth, AuthRequest } from '../middleware/auth'
+import { requireAuth, requireRole } from '../middleware/auth'
 import { Server } from 'socket.io'
 import { prisma } from '../lib/prisma'
 
@@ -21,13 +21,17 @@ export function createMapsRouter(io: Server) {
     res.json(map)
   })
 
-  router.post('/:id', requireAuth, async (req: AuthRequest, res) => {
+  router.post('/:id', requireAuth, requireRole('gm'), async (req: Request, res) => {
     const parsed = SaveMapSchema.safeParse(req.body)
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() })
     const { layers, sessionId } = parsed.data
-    const map = await prisma.map.update({ where: { id: req.params.id }, data: { layers } })
-    io.to(`session:${sessionId}`).emit('map:updated', { mapId: map.id })
-    res.json(map)
+    try {
+      const map = await prisma.map.update({ where: { id: req.params.id }, data: { layers } })
+      io.to(`session:${sessionId}`).emit('map:updated', { mapId: map.id })
+      res.json(map)
+    } catch {
+      res.status(404).json({ error: 'Map not found' })
+    }
   })
 
   return router
