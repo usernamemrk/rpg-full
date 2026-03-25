@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SessionStatus {
+  active
+  ended
+}
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  passwordHash String
+  characters   Character[]
+  mapsCreated  Map[]       @relation("MapCreator")
+  sessionsAsGm Session[]   @relation("SessionGM")
+}
+
+model Character {
+  id             String          @id @default(cuid())
+  name           String
+  class          String
+  hp             Int
+  maxHp          Int
+  level          Int             @default(1)
+  userId         String
+  user           User            @relation(fields: [userId], references: [id])
+  inventoryItems InventoryItem[]
+}
+
+model InventoryItem {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id])
+  itemId      String
+  item        Item      @relation(fields: [itemId], references: [id])
+  quantity    Int       @default(1)
+
+  @@unique([characterId, itemId])
+}
+
+model Session {
+  id          String        @id @default(cuid())
+  code        String        @unique
+  gmId        String
+  gm          User          @relation("SessionGM", fields: [gmId], references: [id])
+  mapId       String
+  map         Map           @relation(fields: [mapId], references: [id])
+  status      SessionStatus @default(active)
+  state       Json
+  chestStates ChestState[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model ChestState {
+  id        String  @id @default(cuid())
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id])
+  chestId   String
+  chest     Chest   @relation(fields: [chestId], references: [id])
+  opened    Boolean @default(false)
+
+  @@unique([sessionId, chestId])
+}
+
+model Map {
+  id          String    @id @default(cuid())
+  name        String
+  width       Int
+  height      Int
+  tilesetId   String
+  layers      Json
+  createdById String
+  createdBy   User      @relation("MapCreator", fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  chests      Chest[]
+  sessions    Session[]
+}
+
+model Chest {
+  id          String       @id @default(cuid())
+  name        String
+  mapId       String
+  map         Map          @relation(fields: [mapId], references: [id])
+  x           Int
+  y           Int
+  lootTable   Json
+  chestStates ChestState[]
+}
+
+model Item {
+  id             String          @id @default(cuid())
+  name           String          @unique
+  type           String
+  rarity         String
+  stats          Json
+  inventoryItems InventoryItem[]
+}
