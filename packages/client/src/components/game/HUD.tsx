@@ -15,6 +15,14 @@ const mm = new Minimap(150, 150)
 
 export default function HUD({ tileMap, camera, players, isGM, onMinimapClick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const playersRef = useRef(players)
+  const cameraRef = useRef(camera)
+  const isGMRef = useRef(isGM)
+
+  // Keep refs in sync (no rAF restart needed for these)
+  useEffect(() => { playersRef.current = players }, [players])
+  useEffect(() => { cameraRef.current = camera }, [camera])
+  useEffect(() => { isGMRef.current = isGM }, [isGM])
 
   useEffect(() => {
     if (!tileMap) return
@@ -23,16 +31,17 @@ export default function HUD({ tileMap, camera, players, isGM, onMinimapClick }: 
     let raf: number
     function loop() {
       const ctx = canvasRef.current?.getContext('2d')
-      if (ctx) mm.render(ctx, tileMap!, camera, players, isGM)
+      if (ctx) mm.render(ctx, tileMap!, cameraRef.current, playersRef.current, isGMRef.current)
       raf = requestAnimationFrame(loop)
     }
     raf = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(raf)
-  }, [tileMap, camera, players, isGM])
+  }, [tileMap])
 
   function handleClick(e: React.MouseEvent) {
     if (!isGM || !onMinimapClick) return
-    const rect = canvasRef.current!.getBoundingClientRect()
+    if (!canvasRef.current) return
+    const rect = canvasRef.current.getBoundingClientRect()
     const { x, y } = mm.minimapToWorld(e.clientX - rect.left, e.clientY - rect.top)
     onMinimapClick(x, y)
   }
