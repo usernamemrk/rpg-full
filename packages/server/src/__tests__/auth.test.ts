@@ -5,9 +5,7 @@ import { prisma } from '../lib/prisma'
 process.env.JWT_SECRET = 'test-secret'
 process.env.JWT_REFRESH_SECRET = 'test-refresh-secret'
 
-// Note: at Task 3, createApp() returns a plain Express app.
-// Task 4 Step 6 will change this to `const { app } = createApp()` when the return type becomes { app, httpServer, io }.
-const app = createApp()
+const { app } = createApp()
 
 describe('POST /api/auth/register', () => {
   it('creates a user and returns 201', async () => {
