@@ -18,7 +18,8 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
 
 export function requireRole(role: 'gm' | 'player') {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (req.user?.role !== role) return res.status(403).json({ error: 'Forbidden' })
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' })
+    if (req.user.role !== role) return res.status(403).json({ error: 'Forbidden' })
     next()
   }
 }

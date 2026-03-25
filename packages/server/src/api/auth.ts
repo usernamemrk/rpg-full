@@ -1,11 +1,10 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import { PrismaClient } from '@prisma/client'
 import { z } from 'zod'
+import { prisma } from '../lib/prisma'
 
 const router = Router()
-const prisma = new PrismaClient()
 
 const RegisterSchema = z.object({ email: z.string().email(), password: z.string().min(6), name: z.string().min(1) })
 const LoginSchema = z.object({ email: z.string().email(), password: z.string() })
@@ -31,7 +30,7 @@ router.post('/register', async (req, res) => {
   const payload = { sub: user.id, role: 'player' as const, characterId: char.id }
   const accessToken = signAccess(payload)
   const refreshToken = signRefresh({ sub: user.id })
-  res.cookie('refreshToken', refreshToken, { httpOnly: true, maxAge: 7 * 24 * 3600 * 1000 })
+  res.cookie('refreshToken', refreshToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 3600 * 1000 })
   res.status(201).json({ accessToken })
 })
 
@@ -43,10 +42,11 @@ router.post('/login', async (req, res) => {
   if (!user || !(await bcrypt.compare(password, user.passwordHash)))
     return res.status(401).json({ error: 'Invalid credentials' })
   const char = user.characters[0]
-  const payload = { sub: user.id, role: 'player' as const, characterId: char?.id ?? '' }
+  if (!char) return res.status(409).json({ error: 'No character found for user' })
+  const payload = { sub: user.id, role: 'player' as const, characterId: char.id }
   const accessToken = signAccess(payload)
   const refreshToken = signRefresh({ sub: user.id })
-  res.cookie('refreshToken', refreshToken, { httpOnly: true, maxAge: 7 * 24 * 3600 * 1000 })
+  res.cookie('refreshToken', refreshToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 3600 * 1000 })
   res.json({ accessToken })
 })
 
@@ -58,7 +58,8 @@ router.post('/refresh', async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: decoded.sub }, include: { characters: { take: 1 } } })
     if (!user) return res.status(401).json({ error: 'User not found' })
     const char = user.characters[0]
-    const accessToken = signAccess({ sub: user.id, role: 'player', characterId: char?.id ?? '' })
+    if (!char) return res.status(409).json({ error: 'No character found for user' })
+    const accessToken = signAccess({ sub: user.id, role: 'player', characterId: char.id })
     res.json({ accessToken })
   } catch {
     res.status(401).json({ error: 'Invalid refresh token' })

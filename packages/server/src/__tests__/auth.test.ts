@@ -1,5 +1,9 @@
 import request from 'supertest'
 import { createApp } from '../app'
+import { prisma } from '../lib/prisma'
+
+process.env.JWT_SECRET = 'test-secret'
+process.env.JWT_REFRESH_SECRET = 'test-refresh-secret'
 
 // Note: at Task 3, createApp() returns a plain Express app.
 // Task 4 Step 6 will change this to `const { app } = createApp()` when the return type becomes { app, httpServer, io }.
@@ -37,4 +41,8 @@ describe('POST /api/auth/login', () => {
     const res = await request(app).post('/api/auth/login').send({ email, password: 'wrong' })
     expect(res.status).toBe(401)
   })
+})
+
+afterAll(async () => {
+  await prisma.$disconnect()
 })
