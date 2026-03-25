@@ -7,6 +7,7 @@ import authRouter from './api/auth'
 import { createMapsRouter } from './api/maps'
 import itemsRouter from './api/items'
 import spellsRouter from './api/spells'
+import { registerSocketHandlers } from './socket/index'
 
 const REQUIRED_ENV = ['JWT_SECRET', 'JWT_REFRESH_SECRET'] as const
 
@@ -21,6 +22,7 @@ export function createApp() {
   const app = express()
   const httpServer = createServer(app)
   const io = new Server(httpServer, { cors: { origin: 'http://localhost:5173', credentials: true } })
+  registerSocketHandlers(io)
 
   app.use(cors({ origin: 'http://localhost:5173', credentials: true }))
   app.use(express.json())
