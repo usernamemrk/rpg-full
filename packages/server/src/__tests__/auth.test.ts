@@ -16,8 +16,8 @@ describe('POST /api/auth/register', () => {
 
   it('returns 400 for duplicate email', async () => {
     const email = `dup-${Date.now()}@test.com`
-    await request(app).post('/api/auth/register').send({ email, password: 'pass', name: 'A' })
-    const res = await request(app).post('/api/auth/register').send({ email, password: 'pass', name: 'B' })
+    await request(app).post('/api/auth/register').send({ email, password: 'password123', name: 'A' })
+    const res = await request(app).post('/api/auth/register').send({ email, password: 'password123', name: 'B' })
     expect(res.status).toBe(400)
   })
 })
