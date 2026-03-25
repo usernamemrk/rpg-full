@@ -1,4 +1,4 @@
-type SpellId = 'lightning' | 'explosion' | 'healing'
+import { SPELLS } from '../config/spells'
 
 interface Player {
   id: string
@@ -6,18 +6,10 @@ interface Player {
   y: number
 }
 
-interface SpellResult {
+export interface SpellResult {
   targetId: string | null
   damage: number
   healing: number
-}
-
-const SPELL_RANGE = 1 // Chebyshev distance in tiles
-
-const SPELL_STATS: Record<SpellId, { damage: number; healing: number }> = {
-  lightning: { damage: 25, healing: 0 },
-  explosion: { damage: 40, healing: 0 },
-  healing:   { damage: 0,  healing: 30 },
 }
 
 function chebyshev(ax: number, ay: number, bx: number, by: number): number {
@@ -25,20 +17,20 @@ function chebyshev(ax: number, ay: number, bx: number, by: number): number {
 }
 
 export function processSpell(
-  spellId: SpellId,
+  spellId: string,
   targetX: number,
   targetY: number,
   players: Player[],
 ): SpellResult {
-  const stats = SPELL_STATS[spellId]
-  if (!stats) return { targetId: null, damage: 0, healing: 0 }
+  const spell = SPELLS.find(s => s.id === spellId)
+  if (!spell) return { targetId: null, damage: 0, healing: 0 }
 
   const nearest = players
     .map(p => ({ p, dist: chebyshev(targetX, targetY, p.x, p.y) }))
-    .filter(({ dist }) => dist <= SPELL_RANGE)
+    .filter(({ dist }) => dist <= spell.range)
     .sort((a, b) => a.dist - b.dist)[0]
 
   if (!nearest) return { targetId: null, damage: 0, healing: 0 }
 
-  return { targetId: nearest.p.id, damage: stats.damage, healing: stats.healing }
+  return { targetId: nearest.p.id, damage: spell.damage ?? 0, healing: spell.healing ?? 0 }
 }
