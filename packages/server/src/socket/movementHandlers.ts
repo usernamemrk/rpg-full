@@ -1,8 +1,12 @@
 import { Server, Socket } from 'socket.io'
 import { sessionStates } from './sessionHandlers'
 
+const VALID_DIRECTIONS = ['up', 'down', 'left', 'right'] as const
+
 export function registerMovementHandlers(io: Server, socket: Socket) {
   socket.on('player:move', ({ x, y, direction }: { x: number; y: number; direction: string }) => {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return
+    if (!VALID_DIRECTIONS.includes(direction as any)) return
     const { sessionId, characterId } = socket.data
     if (!sessionId) return
     const state = sessionStates.get(sessionId)

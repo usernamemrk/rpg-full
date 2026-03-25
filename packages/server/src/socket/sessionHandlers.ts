@@ -30,7 +30,7 @@ export function registerSessionHandlers(io: Server, socket: Socket) {
     socket.data.characterId = characterId
 
     const tokenPayload = socket.handshake.auth?.token
-      ? (() => { try { return jwt.decode(socket.handshake.auth.token) as any } catch { return null } })()
+      ? (() => { try { return jwt.verify(socket.handshake.auth.token, process.env.JWT_SECRET!) as any } catch { return null } })()
       : null
     socket.data.userId = tokenPayload?.sub ?? ''
 
@@ -63,7 +63,8 @@ export function registerSessionHandlers(io: Server, socket: Socket) {
     const state = sessionStates.get(sessionId)
     if (state) {
       state.players = state.players.filter((p: any) => p.characterId !== socket.data.characterId)
-      await prisma.session.update({ where: { id: sessionId }, data: { state } }).catch(() => {})
+      if (state.players.length === 0) sessionStates.delete(sessionId)
+      else await prisma.session.update({ where: { id: sessionId }, data: { state } }).catch(() => {})
     }
   })
 }
