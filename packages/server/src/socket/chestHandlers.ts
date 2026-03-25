@@ -11,48 +11,51 @@ function chebyshev(ax: number, ay: number, bx: number, by: number) {
 
 export function registerChestHandlers(io: Server, socket: Socket) {
   socket.on('chest:open', async ({ chestId }: { chestId: string }) => {
-    const { sessionId, characterId } = socket.data
-    if (!sessionId) return
+    try {
+      const { sessionId, characterId } = socket.data
+      if (!sessionId || !characterId) return
 
-    const state = sessionStates.get(sessionId)
-    const player = state?.players.find((p: any) => p.characterId === characterId)
-    if (!player) return
+      const state = sessionStates.get(sessionId)
+      const player = state?.players.find((p: any) => p.characterId === characterId)
+      if (!player) return
 
-    const chest = await prisma.chest.findUnique({ where: { id: chestId } })
-    if (!chest) return
+      const chest = await prisma.chest.findUnique({ where: { id: chestId } })
+      if (!chest) return
 
-    // Adjacency check
-    if (chebyshev(player.x, player.y, chest.x, chest.y) > 1) return
+      // Adjacency check
+      if (chebyshev(player.x, player.y, chest.x, chest.y) > 1) return
 
-    const tableResult = LootTableSchema.safeParse(chest.lootTable)
-    if (!tableResult.success) return
-    const table = tableResult.data
+      const tableResult = LootTableSchema.safeParse(chest.lootTable)
+      if (!tableResult.success) return
+      const table = tableResult.data
 
-    if (table.mode === 'single_use') {
-      const existing = await prisma.chestState.findUnique({
-        where: { sessionId_chestId: { sessionId, chestId } }
-      })
-      if (existing?.opened) return
-      await prisma.chestState.upsert({
-        where: { sessionId_chestId: { sessionId, chestId } },
-        create: { sessionId, chestId, opened: true },
-        update: { opened: true },
-      })
+      if (table.mode === 'single_use') {
+        try {
+          await prisma.chestState.create({ data: { sessionId, chestId, opened: true } })
+        } catch (err: any) {
+          if (err?.code === 'P2002') return  // already opened (unique constraint)
+          throw err
+        }
+      }
+
+      const itemIds = table.entries.map(e => e.itemId)
+      const allItems = await prisma.item.findMany({ where: { id: { in: itemIds } } })
+      const loot = rollLoot(table, allItems)
+
+      // Save to inventory
+      await Promise.all(loot.map(item =>
+        prisma.inventoryItem.upsert({
+          where: { characterId_itemId: { characterId, itemId: item.itemId } },
+          create: { characterId, itemId: item.itemId, quantity: item.quantity },
+          update: { quantity: { increment: item.quantity } },
+        })
+      ))
+
+      socket.emit('chest:loot', { chestId, items: loot })
+      io.to(`session:${sessionId}`).emit('chest:opened', { chestId })
+    } catch (err) {
+      console.error('[chestHandlers] chest:open error:', err)
+      socket.emit('chest:error', { chestId, message: 'Failed to open chest' })
     }
-
-    const allItems = await prisma.item.findMany()
-    const loot = rollLoot(table, allItems)
-
-    // Save to inventory
-    for (const item of loot) {
-      await prisma.inventoryItem.upsert({
-        where: { characterId_itemId: { characterId, itemId: item.itemId } },
-        create: { characterId, itemId: item.itemId, quantity: item.quantity },
-        update: { quantity: { increment: item.quantity } },
-      })
-    }
-
-    socket.emit('chest:loot', { chestId, items: loot })
-    io.to(`session:${sessionId}`).emit('chest:opened', { chestId })
   })
 }
