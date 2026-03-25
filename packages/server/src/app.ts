@@ -7,6 +7,8 @@ import authRouter from './api/auth'
 import { createMapsRouter } from './api/maps'
 import itemsRouter from './api/items'
 import spellsRouter from './api/spells'
+import chestsRouter from './api/chests'
+import { createSessionsRouter } from './api/sessions'
 import { registerSocketHandlers } from './socket/index'
 
 const REQUIRED_ENV = ['JWT_SECRET', 'JWT_REFRESH_SECRET'] as const
@@ -31,6 +33,8 @@ export function createApp() {
   app.use('/api/maps', createMapsRouter(io))
   app.use('/api/items', itemsRouter)
   app.use('/api/spells', spellsRouter)
+  app.use('/api/chests', chestsRouter)
+  app.use('/api/sessions', createSessionsRouter(io))
 
   return { app, httpServer, io }
 }
