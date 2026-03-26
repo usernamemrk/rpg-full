@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, IRouter } from 'express'
 import { z } from 'zod'
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth'
 import { Server } from 'socket.io'
@@ -7,8 +7,8 @@ const AmbientSchema = z.object({
   ambient: z.enum(['floresta', 'caverna', 'cidade', 'dungeon', 'batalha', 'chuva'])
 })
 
-export function createSessionsRouter(io: Server) {
-  const router = Router()
+export function createSessionsRouter(io: Server): IRouter {
+  const router: IRouter = Router()
 
   router.post('/:id/ambient', requireAuth, requireRole('gm'), async (req: AuthRequest, res) => {
     try {

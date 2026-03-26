@@ -1,10 +1,10 @@
-import { Router } from 'express'
+import { Router, IRouter } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 
-const router = Router()
+const router: IRouter = Router()
 
 const RegisterSchema = z.object({ email: z.string().email(), password: z.string().min(6), name: z.string().min(1) })
 const LoginSchema = z.object({ email: z.string().email(), password: z.string() })

@@ -1,4 +1,4 @@
-import { Router, Request } from 'express'
+import { Router, IRouter, Request } from 'express'
 import { z } from 'zod'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { Server } from 'socket.io'
@@ -12,8 +12,8 @@ const LayersSchema = z.object({
 
 const SaveMapSchema = z.object({ layers: LayersSchema, sessionId: z.string() })
 
-export function createMapsRouter(io: Server) {
-  const router = Router()
+export function createMapsRouter(io: Server): IRouter {
+  const router: IRouter = Router()
 
   router.get('/:id', requireAuth, async (req, res) => {
     const map = await prisma.map.findUnique({ where: { id: req.params.id } })

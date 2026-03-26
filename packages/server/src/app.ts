@@ -1,8 +1,8 @@
-import express from 'express'
+import express, { Express } from 'express'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
 import { Server } from 'socket.io'
-import { createServer } from 'http'
+import { createServer, Server as HttpServer } from 'http'
 import authRouter from './api/auth'
 import { createMapsRouter } from './api/maps'
 import itemsRouter from './api/items'
@@ -19,7 +19,7 @@ export function validateEnv() {
   }
 }
 
-export function createApp() {
+export function createApp(): { app: Express; httpServer: HttpServer; io: Server } {
   validateEnv()
   const app = express()
   const httpServer = createServer(app)

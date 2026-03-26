@@ -1,10 +1,10 @@
-import { Router } from 'express'
+import { Router, IRouter } from 'express'
 import { z } from 'zod'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { LootTableSchema } from '../game/LootService'
 import { prisma } from '../lib/prisma'
 
-const router = Router()
+const router: IRouter = Router()
 
 const ChestUpdateSchema = z.object({ lootTable: LootTableSchema, name: z.string().optional() })
 

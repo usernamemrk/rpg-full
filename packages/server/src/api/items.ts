@@ -1,9 +1,9 @@
-import { Router } from 'express'
+import { Router, IRouter } from 'express'
 import { z } from 'zod'
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth'
 import { prisma } from '../lib/prisma'
 
-const router = Router()
+const router: IRouter = Router()
 
 const ItemSchema = z.object({
   name: z.string().min(1),
