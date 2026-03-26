@@ -1,0 +1,13 @@
+{
+  "name": "rpg-full",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter server dev\" \"pnpm --filter client dev\"",
+    "build": "pnpm --filter server build && pnpm --filter client build",
+    "test": "pnpm --filter server test && pnpm --filter client test"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

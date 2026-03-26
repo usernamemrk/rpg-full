@@ -20,10 +20,12 @@ async function main() {
     await prisma.item.upsert({
       where: { name: item.name },
       update: {},
-      create: { ...item, stats: item.stats as any },
+      create: { ...item, stats: item.stats },
     })
   }
   console.log('Seed complete')
 }
 
-main().finally(() => prisma.$disconnect())
+main()
+  .catch((e) => { console.error(e); process.exit(1) })
+  .finally(() => prisma.$disconnect())

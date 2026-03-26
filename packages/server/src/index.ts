@@ -1,0 +1,5 @@
+import { createApp } from './app'
+
+const { httpServer } = createApp()
+const PORT = process.env.PORT ?? 3001
+httpServer.listen(PORT, () => console.log(`Server :${PORT}`))
