@@ -16,6 +16,7 @@ interface Props {
 export default function ChestEditor({ chestId, initialTable, token, onSave, onClose }: Props) {
   const [table, setTable] = useState<LootTable>(initialTable)
   const [items, setItems] = useState<Item[]>([])
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     apiFetch<Item[]>('/items', {}, token).then(setItems).catch(console.error)
@@ -53,7 +54,7 @@ export default function ChestEditor({ chestId, initialTable, token, onSave, onCl
         <thead><tr><th>Item</th><th>Min</th><th>Max</th><th>Peso</th><th></th></tr></thead>
         <tbody>
           {table.entries.map((entry, i) => (
-            <tr key={i}>
+            <tr key={entry.itemId + '-' + i}>
               <td>
                 <select value={entry.itemId} onChange={e => updateEntry(i, { itemId: e.target.value })}>
                   {items.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
@@ -74,10 +75,15 @@ export default function ChestEditor({ chestId, initialTable, token, onSave, onCl
       <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
         <button onClick={addEntry}>+ Item</button>
         <button onClick={async () => {
-          await apiFetch(`/chests/${chestId}`, { method: 'PUT', body: JSON.stringify({ lootTable: table }) }, token)
-          onSave?.()
-          onClose()
+          try {
+            await apiFetch(`/chests/${chestId}`, { method: 'PUT', body: JSON.stringify({ lootTable: table }) }, token)
+            onSave?.()
+            onClose()
+          } catch (err: any) {
+            setSaveError(err.message)
+          }
         }}>Salvar</button>
+        {saveError && <span style={{ color: 'red' }}>{saveError}</span>}
         <button onClick={onClose}>Cancelar</button>
       </div>
     </div>
