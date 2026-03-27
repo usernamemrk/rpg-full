@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { apiFetch } from '../lib/api'
 
-interface MapOption { id: string; name: string; width: number; height: number }
+interface MapOption { id: string; name: string; width: number; height: number; tilesetId: string }
 
 export default function LobbyPage() {
   const { token, logout } = useAuth()
@@ -15,13 +15,43 @@ export default function LobbyPage() {
   const [loading, setLoading] = useState(false)
   const [tab, setTab] = useState<'gm' | 'player'>('player')
 
-  useEffect(() => {
+  // New map form
+  const [showNewMap, setShowNewMap] = useState(false)
+  const [newMapName, setNewMapName] = useState('')
+  const [newMapW, setNewMapW] = useState(20)
+  const [newMapH, setNewMapH] = useState(20)
+  const [mapError, setMapError] = useState('')
+  const [mapLoading, setMapLoading] = useState(false)
+
+  function loadMaps() {
     if (!token) return
-    apiFetch<MapOption[]>('/maps', {}, token).then(setMaps).catch(() => {})
-  }, [token])
+    apiFetch<MapOption[]>('/maps', {}, token).then(m => {
+      setMaps(m)
+      if (m.length > 0 && !selectedMap) setSelectedMap(m[0].id)
+    }).catch(() => {})
+  }
+
+  useEffect(() => { loadMaps() }, [token])
+
+  async function handleCreateMap() {
+    if (!newMapName.trim()) { setMapError('Nome obrigatório'); return }
+    setMapError(''); setMapLoading(true)
+    try {
+      const m = await apiFetch<MapOption>('/maps', {
+        method: 'POST',
+        body: JSON.stringify({ name: newMapName.trim(), width: newMapW, height: newMapH }),
+      }, token!)
+      setMaps(prev => [m, ...prev])
+      setSelectedMap(m.id)
+      setShowNewMap(false)
+      setNewMapName('')
+    } catch (e: unknown) {
+      setMapError(e instanceof Error ? e.message : String(e))
+    } finally { setMapLoading(false) }
+  }
 
   async function handleCreateSession() {
-    if (!selectedMap) { setError('Escolhe um mapa primeiro'); return }
+    if (!selectedMap) { setError('Seleciona um mapa primeiro'); return }
     setError(''); setLoading(true)
     try {
       const session = await apiFetch<{ id: string }>('/sessions', {
@@ -103,14 +133,12 @@ export default function LobbyPage() {
 
         {tab === 'player' && (
           <div className="ornate anim-up anim-del2" style={{ padding: '32px', maxWidth: 460 }}>
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ fontFamily: 'var(--font-heading)', fontSize: '0.58rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--ember-dim)', marginBottom: 8 }}>
-                Código da Sessão
-              </div>
-              <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.9rem', color: 'var(--parchment-dim)', marginBottom: 16, lineHeight: 1.5 }}>
-                O Mestre compartilha um código de 6 caracteres. Digite abaixo para entrar na aventura.
-              </p>
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: '0.58rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--ember-dim)', marginBottom: 8 }}>
+              Código da Sessão
             </div>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.9rem', color: 'var(--parchment-dim)', marginBottom: 16, lineHeight: 1.5 }}>
+              O Mestre compartilha um código de 6 caracteres. Digite abaixo para entrar na aventura.
+            </p>
             <label className="input-label">Código</label>
             <input
               className="input"
@@ -129,52 +157,113 @@ export default function LobbyPage() {
         )}
 
         {tab === 'gm' && (
-          <div className="ornate anim-up anim-del2" style={{ padding: '32px', maxWidth: 520 }}>
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ fontFamily: 'var(--font-heading)', fontSize: '0.58rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--ember-dim)', marginBottom: 8 }}>
-                Nova Sessão
+          <div className="anim-up anim-del2" style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 520 }}>
+            {/* Map picker */}
+            <div className="ornate" style={{ padding: '28px' }}>
+              <div style={{ fontFamily: 'var(--font-heading)', fontSize: '0.58rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--ember-dim)', marginBottom: 16 }}>
+                Escolher Mapa
               </div>
-              <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.9rem', color: 'var(--parchment-dim)', lineHeight: 1.5 }}>
-                Escolhe o mapa para iniciar sua sessão. Um código único será gerado para seus jogadores.
-              </p>
+
+              {maps.length === 0 && !showNewMap && (
+                <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.9rem', color: 'var(--parchment-dim)', marginBottom: 16, lineHeight: 1.5 }}>
+                  Nenhum mapa criado ainda. Crie seu primeiro mapa abaixo.
+                </p>
+              )}
+
+              {maps.length > 0 && (
+                <div style={{ display: 'grid', gap: 8, marginBottom: 16 }}>
+                  {maps.map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setSelectedMap(m.id)}
+                      style={{
+                        background: selectedMap === m.id ? 'rgba(196,137,14,0.12)' : 'rgba(8,8,16,0.6)',
+                        border: `1px solid ${selectedMap === m.id ? 'var(--ember)' : 'var(--rune-border)'}`,
+                        color: selectedMap === m.id ? 'var(--ember-bright)' : 'var(--parchment)',
+                        padding: '10px 16px', cursor: 'pointer', textAlign: 'left',
+                        transition: 'all 0.2s', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      }}
+                    >
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '1rem' }}>{m.name}</span>
+                      <span style={{ fontFamily: 'var(--font-heading)', fontSize: '0.55rem', letterSpacing: '0.12em', color: 'var(--parchment-dim)' }}>
+                        {m.width}×{m.height}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* New map toggle */}
+              {!showNewMap ? (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setShowNewMap(true)}
+                  style={{ width: '100%', borderStyle: 'dashed' }}
+                >
+                  + Criar novo mapa
+                </button>
+              ) : (
+                <div style={{ background: 'rgba(8,8,16,0.6)', border: '1px solid var(--rune-border)', padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ fontFamily: 'var(--font-heading)', fontSize: '0.55rem', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ember-dim)' }}>
+                    Novo Mapa
+                  </div>
+                  <div>
+                    <label className="input-label">Nome</label>
+                    <input
+                      className="input"
+                      placeholder="Ruínas de Etherhold..."
+                      value={newMapName}
+                      onChange={e => setNewMapName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleCreateMap()}
+                    />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div>
+                      <label className="input-label">Largura (tiles)</label>
+                      <input
+                        className="input"
+                        type="number"
+                        min={5} max={100}
+                        value={newMapW}
+                        onChange={e => setNewMapW(Number(e.target.value))}
+                      />
+                    </div>
+                    <div>
+                      <label className="input-label">Altura (tiles)</label>
+                      <input
+                        className="input"
+                        type="number"
+                        min={5} max={100}
+                        value={newMapH}
+                        onChange={e => setNewMapH(Number(e.target.value))}
+                      />
+                    </div>
+                  </div>
+                  {mapError && <div className="error-msg">{mapError}</div>}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleCreateMap} disabled={mapLoading}>
+                      {mapLoading ? '...' : 'Forjar Mapa'}
+                    </button>
+                    <button className="btn btn-ghost" onClick={() => { setShowNewMap(false); setMapError('') }}>
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <label className="input-label">Mapa</label>
-            {maps.length === 0 ? (
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: 'var(--parchment-dim)', padding: '12px 0', marginBottom: 20 }}>
-                Nenhum mapa disponível ainda.
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gap: 8, marginBottom: 20 }}>
-                {maps.map(m => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setSelectedMap(m.id)}
-                    style={{
-                      background: selectedMap === m.id ? 'rgba(196,137,14,0.12)' : 'rgba(8,8,16,0.6)',
-                      border: `1px solid ${selectedMap === m.id ? 'var(--ember)' : 'var(--rune-border)'}`,
-                      color: selectedMap === m.id ? 'var(--ember-bright)' : 'var(--parchment)',
-                      padding: '10px 16px',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      transition: 'all 0.2s',
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    }}
-                  >
-                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '1rem' }}>{m.name}</span>
-                    <span style={{ fontFamily: 'var(--font-heading)', fontSize: '0.55rem', letterSpacing: '0.12em', color: 'var(--parchment-dim)' }}>
-                      {m.width}×{m.height}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {error && <div className="error-msg" style={{ marginBottom: 16 }}>{error}</div>}
-            <button className="btn btn-primary btn-full" onClick={handleCreateSession} disabled={loading || !selectedMap}>
-              {loading ? '...' : 'Abrir Portal'}
-            </button>
+            {/* Create session */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {error && <div className="error-msg">{error}</div>}
+              <button
+                className="btn btn-primary btn-full"
+                onClick={handleCreateSession}
+                disabled={loading || !selectedMap}
+              >
+                {loading ? '...' : 'Abrir Portal'}
+              </button>
+            </div>
           </div>
         )}
       </main>
