@@ -50,7 +50,7 @@ export default function HUD({ tileMap, camera, players, isGM, onMinimapClick }: 
     <div style={{ position: 'absolute', bottom: 8, right: 8 }}>
       <canvas
         ref={canvasRef} width={150} height={150}
-        style={{ border: '2px solid #555', cursor: isGM ? 'crosshair' : 'default' }}
+        style={{ border: '1px solid var(--rune-border)', cursor: isGM ? 'crosshair' : 'default', boxShadow: '0 0 20px rgba(0,0,0,0.6), inset 0 0 8px rgba(0,0,0,0.4)', display: 'block' }}
         onClick={handleClick}
       />
     </div>

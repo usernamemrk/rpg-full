@@ -55,9 +55,28 @@ export default function GamePage() {
   }
 
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }} tabIndex={0} onKeyDown={handleKeyDown}>
-      <canvas ref={canvasRef} width={800} height={600} style={{ display: 'block', background: '#111' }} />
-      <HUD tileMap={tileMap.current} camera={camera} players={players.map(p => ({ userId: p.userId ?? p.characterId, x: p.x, y: p.y, class: p.class ?? 'warrior', isLocal: p.characterId === characterId }))} isGM={false} />
+    <div
+      style={{ minHeight: '100vh', background: 'var(--void)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      // eslint-disable-next-line jsx-a11y/no-autofocus
+      autoFocus
+    >
+      <div className="bg-atmo" style={{ opacity: 0.4 }} />
+      <div style={{ position: 'relative', zIndex: 10 }}>
+        <canvas
+          ref={canvasRef}
+          width={800}
+          height={600}
+          style={{ display: 'block', background: '#0a0a0f', border: '1px solid var(--rune-border)', boxShadow: '0 0 60px rgba(0,0,0,0.8), 0 0 120px rgba(0,0,0,0.5)' }}
+        />
+        <HUD
+          tileMap={tileMap.current}
+          camera={camera}
+          players={players.map(p => ({ userId: p.userId ?? p.characterId, x: p.x, y: p.y, class: p.class ?? 'warrior', isLocal: p.characterId === characterId }))}
+          isGM={false}
+        />
+      </div>
     </div>
   )
 }
