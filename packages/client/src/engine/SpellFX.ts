@@ -11,14 +11,15 @@ export class SpellFX {
     canvas.style.cssText = `position:absolute;top:0;left:0;pointer-events:none;z-index:10`
     document.body.appendChild(canvas)
 
+    const ref: { game: any } = { game: null }
     return new Promise(resolve => {
-      const game = new Phaser.Game({
+      ref.game = new Phaser.Game({
         type: Phaser.CANVAS,
         canvas,
         width, height,
         transparent: true,
         scene: {
-          create(this: any) { resolve({ game, scene: this, canvas }) }
+          create(this: any) { resolve({ game: ref.game, scene: this, canvas }) }
         }
       })
     })
@@ -26,7 +27,7 @@ export class SpellFX {
 
   private cleanup(game: any, canvas: HTMLCanvasElement, delayMs: number) {
     setTimeout(() => {
-      game.destroy(true)
+      if (game) game.destroy(true)
       canvas.remove()
     }, delayMs)
   }
@@ -65,19 +66,42 @@ export class SpellFX {
   async explosion(worldX: number, worldY: number, camera: Camera, radius = 64): Promise<void> {
     const { x, y } = camera.worldToScreen(worldX, worldY)
     const { game, scene, canvas } = await this.createPhaserScene(camera.viewW, camera.viewH)
+    const gfx = scene.add.graphics()
+    const FRAMES = 45
+    let frame = 0
 
-    const particles = scene.add.particles(x, y, undefined, {
-      speed: { min: radius * 0.5, max: radius * 2.5 },
-      angle: { min: 0, max: 360 },
-      scale: { start: 1, end: 0 },
-      lifespan: 600,
-      quantity: 30,
-      tint: [0xff4400, 0xff8800, 0xffdd00],
-      blendMode: 'ADD',
+    scene.time.addEvent({
+      delay: 16,
+      repeat: FRAMES - 1,
+      callback: () => {
+        gfx.clear()
+        const progress = frame / FRAMES
+        const alpha = 1 - progress
+
+        gfx.lineStyle(3, 0xff6600, alpha)
+        gfx.strokeCircle(x, y, radius * progress)
+
+        if (progress < 0.6) {
+          const innerProgress = progress / 0.6
+          gfx.lineStyle(2, 0xffdd00, (1 - innerProgress) * 0.8)
+          gfx.strokeCircle(x, y, radius * 0.5 * innerProgress)
+        }
+
+        for (let i = 0; i < 8; i++) {
+          const angle = (i / 8) * Math.PI * 2
+          const len = radius * 0.7 * progress
+          gfx.lineStyle(1, 0xff9900, alpha * 0.7)
+          gfx.beginPath()
+          gfx.moveTo(x, y)
+          gfx.lineTo(x + Math.cos(angle) * len, y + Math.sin(angle) * len)
+          gfx.strokePath()
+        }
+
+        frame++
+      },
     })
 
-    setTimeout(() => particles.stop(), 100)
-    this.cleanup(game, canvas, 800)
+    this.cleanup(game, canvas, FRAMES * 16 + 100)
   }
 
   async healing(worldX: number, worldY: number, camera: Camera): Promise<void> {
