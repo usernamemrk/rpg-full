@@ -9,6 +9,7 @@ import itemsRouter from './api/items'
 import spellsRouter from './api/spells'
 import chestsRouter from './api/chests'
 import { createSessionsRouter } from './api/sessions'
+import inventoryRouter from './api/inventory'
 import { registerSocketHandlers } from './socket/index'
 
 const REQUIRED_ENV = ['JWT_SECRET', 'JWT_REFRESH_SECRET'] as const
@@ -36,6 +37,7 @@ export function createApp(): { app: Express; httpServer: HttpServer; io: Server 
   app.use('/api/spells', spellsRouter)
   app.use('/api/chests', chestsRouter)
   app.use('/api/sessions', createSessionsRouter(io))
+  app.use('/api/inventory', inventoryRouter)
 
   return { app, httpServer, io }
 }
