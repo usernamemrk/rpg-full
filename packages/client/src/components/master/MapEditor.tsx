@@ -114,7 +114,7 @@ export default function MapEditor({ tileMap, tileSet, onSave }: Props) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 24px)', gap: 2 }}>
           {Array.from({ length: PALETTE_TILES }, (_, i) => (
             <div key={i + 1} onClick={() => setSelectedTile(i + 1)}
-              style={{ width: 24, height: 24, border: selectedTile === i + 1 ? '2px solid yellow' : '1px solid #555', cursor: 'pointer', background: `hsl(${(i * 40) % 360},60%,40%)` }} />
+              style={{ width: 24, height: 24, border: selectedTile === i + 1 ? '2px solid var(--ember)' : '1px solid var(--rune-border)', cursor: 'pointer', background: `hsl(${((i + 1) * 37) % 360},55%,38%)` }} />
           ))}
         </div>
         <button onClick={undo}>Desfazer</button>
