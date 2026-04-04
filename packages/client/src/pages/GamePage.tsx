@@ -6,6 +6,7 @@ import { useGame } from '../hooks/useGame'
 import { AudioManager, AmbientName } from '../engine/AudioManager'
 import { SpellFX } from '../engine/SpellFX'
 import HUD from '../components/game/HUD'
+import InventoryPanel from '../components/game/InventoryPanel'
 
 const audioManager = new AudioManager()
 const spellFX = new SpellFX()
@@ -17,6 +18,7 @@ export default function GamePage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const { camera, entities, tileMap, load } = useGame(canvasRef)
   const [players, setPlayers] = useState<any[]>([])
+  const [inventoryOpen, setInventoryOpen] = useState(false)
 
   useEffect(() => {
     const offPlayers = on<{ players: any[] }>('session:players', ({ players }) => {
@@ -41,6 +43,7 @@ export default function GamePage() {
   }, [on, entities, camera])
 
   function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'i' || e.key === 'I') { setInventoryOpen(v => !v); return }
     const local = players.find(p => p.characterId === characterId)
     if (!local) return
     const STEP = 32
@@ -75,6 +78,12 @@ export default function GamePage() {
           camera={camera}
           players={players.map(p => ({ userId: p.userId ?? p.characterId, x: p.x, y: p.y, class: p.class ?? 'warrior', isLocal: p.characterId === characterId }))}
           isGM={false}
+        />
+        <InventoryPanel
+          characterId={characterId ?? ''}
+          token={token ?? ''}
+          open={inventoryOpen}
+          onClose={() => setInventoryOpen(false)}
         />
       </div>
     </div>
